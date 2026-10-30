@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Jetstrike</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Rajdhani:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --khaki: #d9cdb0;
+    --khaki-dim: #9a917c;
+    --amber: #f2a65a;
+    --teal: #3fa796;
+    --rust: #b8452e;
+    --panel: rgba(12,16,14,0.82);
+    --panel-edge: rgba(217,205,176,0.18);
+  }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:#0b0d10;
+    color:var(--khaki);
+    font-family:'Rajdhani',sans-serif;
+    display:flex; align-items:center; justify-content:center;
+    overflow:hidden;
+    touch-action:none;
+    user-select:none;
+  }
+  .frame{ width:100%; max-width:860px; padding:14px; }
+  .masthead{
+    display:flex; align-items:baseline; justify-content:space-between;
+    margin-bottom:8px;
+  }
+  h1{
+    font-family:'Oswald',sans-serif;
+    font-weight:700;
+    font-size:1.7rem;
+    letter-spacing:0.5px;
+    margin:0;
+    color:var(--khaki);
+  }
+  h1 em{ font-style:normal; color:var(--amber); }
+  .tag{ font-size:0.85rem; color:var(--khaki-dim); }
+  .arena-wrap{
+    position:relative;
+    border:1px solid var(--panel-edge);
+    border-radius:8px;
+    overflow:hidden;
+    background:#0b0d10;
+  }
+  canvas{ display:block; width:100%; height:auto; }
+
+  .hud{
+    position:absolute; top:10px; left:10px; right:10px;
+    display:flex; justify-content:space-between;
+    pointer-events:none;
+    font-size:0.95rem;
+  }
+  .hud .block{
+    background:var(--panel);
+    border:1px solid var(--panel-edge);
+    border-radius:6px;
+    padding:6px 10px;
+    min-width:120px;
+  }
+  .bar-row{ display:flex; align-items:center; gap:6px; margin:3px 0; }
+  .bar-label{ width:34px; font-size:0.72rem; color:var(--khaki-dim); }
+  .bar-track{ flex:1; height:7px; background:#2a2a26; border-radius:4px; overflow:hidden; }
+  .bar-fill{ height:100%; border-radius:4px; }
+  .fill-hp{ background:var(--rust); }
+  .fill-fuel{ background:var(--teal); }
+  .kills{
+    font-family:'Oswald',sans-serif;
+    font-weight:600;
+    font-size:1.4rem;
+    color:var(--amber);
+    text-align:right;
+  }
+  .kills small{ display:block; font-family:'Rajdhani',sans-serif; font-weight:500; font-size:0.7rem; color:var(--khaki-dim); }
+  .lives{ font-size:0.8rem; color:var(--khaki-dim); text-align:right; margin-top:2px; }
+
+  .overlay{
+    position:absolute; inset:0;
+    background:rgba(10,12,10,0.88);
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; gap:10px; padding:20px;
+  }
+  .overlay.hidden{ display:none; }
+  .overlay h2{
+    font-family:'Oswald',sans-serif;
+    font-weight:700;
+    font-size:1.6rem;
+    margin:0;
+  }
+  .overlay p{ margin:0; color:var(--khaki-dim); max-width:32ch; font-size:0.95rem; }
+  button.primary{
+    margin-top:6px;
+    background:var(--teal);
+    color:#0b0d10;
+    border:none;
+    padding:10px 24px;
+    border-radius:6px;
+    font-family:'Oswald',sans-serif;
+    font-weight:600;
+    font-size:1rem;
+    letter-spacing:0.3px;
+    cursor:pointer;
+  }
+
+  .touch-controls{
+    display:flex; justify-content:space-between; align-items:flex-end;
+    margin-top:12px;
+  }
+  .pad{ display:flex; gap:8px; }
+  .pad button{
+    width:56px; height:56px;
+    background:var(--panel);
+    border:1px solid var(--panel-edge);
+    color:var(--khaki);
+    border-radius:10px;
+    font-size:1.3rem;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .pad button:active{ background:rgba(217,205,176,0.15); }
+  #jetBtn.active{ background:var(--teal); color:#0b0d10; }
+  #fireBtn{
+    width:76px; height:76px;
+    background:var(--rust);
+    color:var(--khaki);
+    border:none;
+    border-radius:50%;
+    font-family:'Oswald',sans-serif;
+    font-weight:600;
+    font-size:0.85rem;
+  }
+  #fireBtn:active{ background:#d65a3c; }
+  .hint{ text-align:center; color:var(--khaki-dim); font-size:0.75rem; margin-top:10px; }
+</style>
+</head>
+<body>
+<div class="frame">
+  <div class="masthead">
+    <h1>Jet<em>strike</em></h1>
+    <div class="tag">Rooftop arena &middot; vs bots</div>
+  </div>
+
+  <div class="arena-wrap">
+    <canvas id="game" width="800" height="450"></canvas>
+    <div class="hud">
+      <div class="block">
+        <div class="bar-row"><span class="bar-label">HP</span><div class="bar-track"><div class="bar-fill fill-hp" id="hpBar" style="width:100%"></div></div></div>
+        <div class="bar-row"><span class="bar-label">FUEL</span><div class="bar-track"><div class="bar-fill fill-fuel" id="fuelBar" style="width:100%"></div></div></div>
+      </div>
+      <div class="block">
+        <div class="kills" id="killCount">0<small>kills</small></div>
+        <div class="lives" id="livesText">3 lives left</div>
+      </div>
+    </div>
+    <div class="overlay" id="overlay">
+      <h2 id="ovTitle">Rooftop Protocol</h2>
+      <p id="ovText">Move, thrust with your jetpack, and shoot the enemy squad before they shoot you. Three lives &mdash; rack up kills.</p>
+      <button class="primary" id="startBtn">Drop In</button>
+    </div>
+  </div>
+
+  <div class="touch-controls" id="touchControls">
+    <div class="pad">
+      <button id="leftBtn">&#9664;</button>
+      <button id="rightBtn">&#9654;</button>
+      <button id="jetBtn">&#9650;</button>
+    </div>
+    <button id="fireBtn">FIRE</button>
+  </div>
+  <p class="hint">A/D or &#8592;&#8594; to move &middot; hold W/Space for jetpack &middot; J or click to fire</p>
+</div>
+
+<script>
+(function(){
+  const canvas = document.getElementById('game');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const GRAVITY = 0.45;
+  const JET_ACCEL = 0.62;
+  const MOVE_SPEED = 3.4;
+  const FUEL_MAX = 100;
+
+  const hpBar = document.getElementById('hpBar');
+  const fuelBar = document.getElementById('fuelBar');
+  const killCount = document.getElementById('killCount');
+  const livesText = document.getElementById('livesText');
+  const overlay = document.getElementById('overlay');
+  const ovTitle = document.getElementById('ovTitle');
+  const ovText = document.getElementById('ovText');
+  const startBtn = document.getElementById('startBtn');
+
+  const platforms = [
+    {x:0, y:420, w:800, h:30},
+    {x:60, y:330, w:160, h:16},
+    {x:320, y:290, w:180, h:16},
+    {x:600, y:330, w:160, h:16},
+    {x:180, y:210, w:150, h:16},
+    {x:470, y:210, w:150, h:16},
+    {x:340, y:130, w:120, h:16},
+  ];
+
+  let player, bots, bullets, particles, kills, lives, running, spawnTimer;
+
+  function newActor(x, y, isBot, color){
+    return {
+      x, y, w:26, h:34, vx:0, vy:0,
+      facing: isBot ? -1 : 1,
+      hp: 100, fuel: FUEL_MAX,
+      onGround:false, color,
+      isBot, shootCd:0, patrolDir: Math.random()<0.5?-1:1,
+      alive:true, respawnIn:0
+    };
+  }
+
+  function reset(){
+    player = newActor(70, 380, false, '#3fa796');
+    bots = [
+      newActor(650, 380, true, '#b8452e'),
+      newActor(380, 260, true, '#c46a4f'),
+      newActor(200, 170, true, '#a8402c'),
+    ];
+    bullets = [];
+    particles = [];
+    kills = 0;
+    lives = 3;
+    updateHud();
+  }
+
+  function updateHud(){
+    hpBar.style.width = Math.max(0, player.hp) + '%';
+    fuelBar.style.width = Math.max(0, player.fuel) + '%';
+    killCount.innerHTML = kills + '<small>kills</small>';
+    livesText.textContent = lives + (lives===1 ? ' life left' : ' lives left');
+  }
+
+  const keys = {};
+  window.addEventListener('keydown', e => {
+    keys[e.key.toLowerCase()] = true;
+    if(e.key===' ') e.preventDefault();
+  });
+  window.addEventListener('keyup', e => { keys[e.key.toLowerCase()] = false; });
+
+  let touchLeft=false, touchRight=false, touchJet=false, touchFire=false;
+  function bindHold(id, setter){
+    const el = document.getElementById(id);
+    const on = (e) => { e.preventDefault(); setter(true); if(id==='jetBtn') el.classList.add('active'); };
+    const off = (e) => { setter(false); if(id==='jetBtn') el.classList.remove('active'); };
+    el.addEventListener('touchstart', on, {passive:false});
+    el.addEventListener('touchend', off);
+    el.addEventListener('mousedown', on);
+    el.addEventListener('mouseup', off);
+    el.addEventListener('mouseleave', off);
+  }
+  bindHold('leftBtn', v => touchLeft = v);
+  bindHold('rightBtn', v => touchRight = v);
+  bindHold('jetBtn', v => touchJet = v);
+  bindHold('fireBtn', v => touchFire = v);
+
+  function rectsOverlap(a, b){
+    return a.x < b.x+b.w && a.x+a.w > b.x && a.y < b.y+b.h && a.y+a.h > b.y;
+  }
+
+  function applyPlatformCollision(actor){
+    actor.onGround = false;
+    for(const p of platforms){
+      const withinX = actor.x + actor.w > p.x && actor.x < p.x + p.w;
+      const fallingOnto = actor.vy >= 0 &&
+        (actor.y + actor.h) <= p.y + 12 &&
+        (actor.y + actor.h + actor.vy) >= p.y;
+      if(withinX && fallingOnto){
+        actor.y = p.y - actor.h;
+        actor.vy = 0;
+        actor.onGround = true;
+      }
+    }
+    if(actor.x < 0) actor.x = 0;
+    if(actor.x + actor.w > W) actor.x = W - actor.w;
+    if(actor.y + actor.h > H){ actor.y = H - actor.h; actor.vy = 0; actor.onGround = true; }
+    if(actor.y < 0){ actor.y = 0; actor.vy = 0; }
+  }
+
+  function spawnBullet(owner, x, y, dir){
+    bullets.push({ x, y, vx: dir*8.5, vy:-0.4, owner, life:90 });
+  }
+
+  function spawnHitParticles(x, y, color){
+    for(let i=0;i<7;i++){
+      particles.push({
+        x, y, vx:(Math.random()-0.5)*4, vy:(Math.random()-0.5)*4,
+        life: 20+Math.random()*10, color
+      });
+    }
+  }
+
+  function killBot(bot){
+    bot.alive = false;
+    bot.respawnIn = 120 + Math.random()*60;
+    spawnHitParticles(bot.x+bot.w/2, bot.y+bot.h/2, '#f2a65a');
+    kills++;
+    updateHud();
+  }
+
+  function respawnBot(bot){
+    const spots = [[650,380],[380,260],[200,170],[600,330],[340,130]];
+    const s = spots[Math.floor(Math.random()*spots.length)];
+    bot.x = s[0]; bot.y = s[1]; bot.vx=0; bot.vy=0;
+    bot.hp = 100; bot.alive = true; bot.fuel = FUEL_MAX;
+  }
+
+  function playerHit(dmg){
+    player.hp -= dmg;
+    spawnHitParticles(player.x+player.w/2, player.y+player.h/2, '#3fa796');
+    if(player.hp <= 0){
+      lives--;
+      updateHud();
+      if(lives <= 0){
+        endGame();
+      } else {
+        player.x = 70; player.y = 380; player.vx=0; player.vy=0;
+        player.hp = 100; player.fuel = FUEL_MAX;
+      }
+    }
+  }
+
+  function endGame(){
+    running = false;
+    ovTitle.textContent = 'Extracted';
+    ovText.textContent = `Final tally: ${kills} kill${kills===1?'':'s'}. Drop back in?`;
+    startBtn.textContent = 'Redeploy';
+    overlay.classList.remove('hidden');
+  }
+
+  function updatePlayer(){
+    const left = keys['a'] || keys['arrowleft'] || touchLeft;
+    const right = keys['d'] || keys['arrowright'] || touchRight;
+    const jet = keys['w'] || keys['arrowup'] || keys[' '] || touchJet;
+    const fire = keys['j'] || touchFire;
+
+    if(left){ player.vx = -MOVE_SPEED; player.facing = -1; }
+    else if(right){ player.vx = MOVE_SPEED; player.facing = 1; }
+    else { player.vx *= 0.8; }
+
+    if(jet && player.fuel > 0){
+      player.vy -= JET_ACCEL;
+      player.fuel -= 1.4;
+    } else if(player.onGround){
+      player.fuel = Math.min(FUEL_MAX, player.fuel + 0.6);
+    } else {
+      player.fuel = Math.min(FUEL_MAX, player.fuel + 0.15);
+    }
+
+    player.vy += GRAVITY;
+    player.vy = Math.min(player.vy, 10);
+    player.x += player.vx;
+    player.y += player.vy;
+    applyPlatformCollision(player);
+
+    if(player.shootCd > 0) player.shootCd--;
+    if(fire && player.shootCd <= 0){
+      spawnBullet('player', player.x + (player.facing>0? player.w : 0), player.y + player.h*0.4, player.facing);
+      player.shootCd = 14;
+    }
+
+    fuelBar.style.width = Math.max(0, player.fuel) + '%';
+    hpBar.style.width = Math.max(0, player.hp) + '%';
+  }
+
+  function updateBots(){
+    for(const bot of bots){
+      if(!bot.alive){
+        bot.respawnIn--;
+        if(bot.respawnIn <= 0) respawnBot(bot);
+        continue;
+      }
+      const dx = player.x - bot.x;
+      const dy = player.y - bot.y;
+      const dist = Math.abs(dx);
+      const sameBand = Math.abs(dy) < 40;
+
+      if(sameBand && dist < 420){
+        bot.facing = dx > 0 ? 1 : -1;
+        if(dist > 140) bot.vx = bot.facing * MOVE_SPEED * 0.8;
+        else if(dist < 90) bot.vx = -bot.facing * MOVE_SPEED * 0.6;
+        else bot.vx *= 0.7;
+
+        if(bot.shootCd > 0) bot.shootCd--;
+        else {
+          spawnBullet('bot', bot.x + (bot.facing>0? bot.w : 0), bot.y + bot.h*0.4, bot.facing);
+          bot.shootCd = 50 + Math.random()*30;
+        }
+      } else {
+        bot.vx = bot.patrolDir * MOVE_SPEED * 0.5;
+        if(Math.random() < 0.01) bot.patrolDir *= -1;
+        if(!bot.onGround && Math.random() < 0.02 && bot.fuel > 20){
+          bot.vy -= JET_ACCEL * 2;
+        }
+      }
+
+      if(dy < -30 && bot.fuel > 10 && Math.random() < 0.05){
+        bot.vy -= JET_ACCEL;
+        bot.fuel -= 1.2;
+      } else if(bot.onGround){
+        bot.fuel = Math.min(FUEL_MAX, bot.fuel + 0.6);
+      }
+
+      bot.vy += GRAVITY;
+      bot.vy = Math.min(bot.vy, 10);
+      bot.x += bot.vx;
+      bot.y += bot.vy;
+      applyPlatformCollision(bot);
+    }
+  }
+
+  function updateBullets(){
+    for(let i = bullets.length-1; i>=0; i--){
+      const b = bullets[i];
+      b.vy += 0.05;
+      b.x += b.vx;
+      b.y += b.vy;
+      b.life--;
+
+      let hit = false;
+      if(b.owner === 'player'){
+        for(const bot of bots){
+          if(bot.alive && rectsOverlap({x:b.x-3,y:b.y-3,w:6,h:6}, bot)){
+            bot.hp -= 20;
+            spawnHitParticles(b.x, b.y, '#f2a65a');
+            if(bot.hp <= 0) killBot(bot);
+            hit = true;
+            break;
+          }
+        }
+      } else {
+        if(rectsOverlap({x:b.x-3,y:b.y-3,w:6,h:6}, player)){
+          playerHit(15);
+          hit = true;
+        }
+      }
+      for(const p of platforms){
+        if(rectsOverlap({x:b.x-2,y:b.y-2,w:4,h:4}, p)) hit = true;
+      }
+      if(hit || b.life <= 0 || b.x<0 || b.x>W || b.y>H) bullets.splice(i,1);
+    }
+  }
+
+  function updateParticles(){
+    for(let i=particles.length-1;i>=0;i--){
+      const p = particles[i];
+      p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life--;
+      if(p.life<=0) particles.splice(i,1);
+    }
+  }
+
+  function drawSky(){
+    const g = ctx.createLinearGradient(0,0,0,H);
+    g.addColorStop(0, '#1b1f3a');
+    g.addColorStop(0.55, '#4a3a4a');
+    g.addColorStop(1, '#a24634');
+    ctx.fillStyle = g;
+    ctx.fillRect(0,0,W,H);
+    // distant skyline
+    ctx.fillStyle = 'rgba(10,10,16,0.5)';
+    for(let i=0;i<8;i++){
+      const bw = 50 + (i*37)%70;
+      const bh = 60 + (i*53)%140;
+      ctx.fillRect(i*105, H-bh-30, bw, bh);
+    }
+  }
+
+  function drawPlatforms(){
+    for(const p of platforms){
+      ctx.fillStyle = '#3d3d38';
+      ctx.fillRect(p.x, p.y, p.w, p.h);
+      ctx.fillStyle = '#55554d';
+      ctx.fillRect(p.x, p.y, p.w, 4);
+      ctx.strokeStyle = 'rgba(0,0,0,0.35)';
+      for(let i=14; i<p.w; i+=26){
+        ctx.beginPath();
+        ctx.moveTo(p.x+i, p.y+4);
+        ctx.lineTo(p.x+i, p.y+p.h);
+        ctx.stroke();
+      }
+    }
+  }
+
+  function drawActor(a){
+    if(!a.alive) return;
+    ctx.save();
+    // jetpack flame
+    ctx.fillStyle = 'rgba(242,166,90,0.85)';
+    if(a.vy < -1){
+      ctx.beginPath();
+      ctx.moveTo(a.x+a.w*0.3, a.y+a.h);
+      ctx.lineTo(a.x+a.w*0.5, a.y+a.h+10+Math.random()*6);
+      ctx.lineTo(a.x+a.w*0.7, a.y+a.h);
+      ctx.fill();
+    }
+    // body
+    ctx.fillStyle = a.color;
+    ctx.beginPath();
+    ctx.roundRect(a.x, a.y, a.w, a.h, 5);
+    ctx.fill();
+    // visor
+    ctx.fillStyle = '#0b0d10';
+    const vx = a.facing>0 ? a.x+a.w*0.55 : a.x+a.w*0.1;
+    ctx.fillRect(vx, a.y+6, a.w*0.35, 6);
+    // gun
+    ctx.fillStyle = '#22221f';
+    const gx = a.facing>0 ? a.x+a.w-2 : a.x - 12;
+    ctx.fillRect(gx, a.y+a.h*0.42, 14, 5);
+
+    // hp sliver
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillRect(a.x, a.y-8, a.w, 4);
+    ctx.fillStyle = a.isBot ? '#b8452e' : '#3fa796';
+    ctx.fillRect(a.x, a.y-8, a.w * Math.max(0,a.hp)/100, 4);
+    ctx.restore();
+  }
+
+  function drawBullets(){
+    ctx.fillStyle = '#ffe1a8';
+    for(const b of bullets){
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, 2.6, 0, Math.PI*2);
+      ctx.fill();
+    }
+  }
+
+  function drawParticles(){
+    for(const p of particles){
+      ctx.fillStyle = p.color;
+      ctx.globalAlpha = Math.max(0, p.life/30);
+      ctx.fillRect(p.x, p.y, 3, 3);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  function render(){
+    drawSky();
+    drawPlatforms();
+    drawBullets();
+    for(const bot of bots) drawActor(bot);
+    drawActor(player);
+    drawParticles();
+  }
+
+  function loop(){
+    if(!running) return;
+    updatePlayer();
+    updateBots();
+    updateBullets();
+    updateParticles();
+    render();
+    requestAnimationFrame(loop);
+  }
+
+  function startGame(){
+    reset();
+    overlay.classList.add('hidden');
+    running = true;
+    requestAnimationFrame(loop);
+  }
+
+  startBtn.addEventListener('click', startGame);
+
+  reset();
+  render();
+})();
+</script>
+</body>
+</html>
